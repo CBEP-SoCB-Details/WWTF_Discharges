@@ -1,0 +1,182 @@
+---
+title: "Analysis of 2016-2018 Casco Bay WWTF Discharge Data"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership."
+date: "05/09/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+
+#Load libraries
+```{r}
+library(tidyverse)
+library(readxl)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+## Folder References
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent <- dirname(getwd())
+sibling <- file.path(parent,sibfldnm)
+
+#dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+#Load Data
+```{r}
+the_data <- read_excel("Total_Discharge_Volumes.xlsx", 
+                        skip = 4) %>%
+  rename(site = Site,
+         dt = `Report date`,
+         avg = `Average Daily`,
+         max = `Max Daily`) %>%
+  mutate(dt = as.Date(dt),
+         year = as.numeric(format(dt, format = '%Y')),
+         month = factor(as.numeric(format(dt, format = '%m')),
+                        levels = 1:12, labels = month.abb)) %>%
+  mutate(site = if_else(site == 'South Portland 001A',
+                        'South Portland',
+                        site)) %>%
+  relocate(site, dt, year, month) %>%
+  arrange(site, year, month)
+```
+
+#What data do we have available?
+```{r}
+table(the_data$month, the_data$year)
+```
+
+So, we have slightly more than two years of continuous discharge data for all sites.
+
+# Delete Extra Months in 2018
+Since we want to calculate annual loads, we need annual averages (since we don't 
+have nitrogen concentrations by month too...).
+```{r}
+the_data <- the_data %>%
+  filter(! (year == 2018 & (month == 'May' | month == 'Jun' | month == 'Jul')))
+```
+
+```{r}
+plt <- ggplot(the_data, aes(dt, avg, color = site)) +
+  geom_line() + 
+  scale_y_log10() +
+  ylab('Mean Daily Dischrges (MGD)') +
+  scale_x_date(date_breaks = '3 months', date_labels = '%m/%Y') +
+  
+    theme_cbep(base_size = 12) +
+theme(axis.text.x = element_text(angle = 90))
+plt
+```
+
+There is an obvious seasonal pattern.  Peak flows in spring, lowest flows in
+fall. That suggests the importance of infiltration and exfilitration from the
+sewer systems in our region.
+
+```{r}
+plt <- ggplot(the_data, aes(as.numeric(month), avg, color = site)) + 
+  geom_point() + 
+  geom_smooth( method = 'gam', formula= y~ s(x, bs = 'cc')) + # Cyclic smoother
+    
+  scale_y_log10() + 
+  scale_x_continuous(limits=c(1,12), breaks = c(3,6,9,12)) +
+  scale_color_viridis_d() +
+  
+  xlab('Month') +
+    ylab('Average Daily Discharge (MG)') +
+  
+  theme_cbep(base_size = 12)
+plt
+```
+
+# Calculate Annual Totals
+```{r}
+monthdays <- c(31, 28, 31, 30,31,30, 31, 31, 30, 31, 30, 31)
+tmp <- the_data %>%
+  mutate(MonthTot= avg * monthdays[as.numeric(month)])
+
+annual_data <- tmp %>% 
+  select(site, MonthTot) %>% 
+  group_by(site) %>% 
+  summarise(Annual = sum(MonthTot, na.omit = TRUE) / 2,
+            Monthly = Annual / 12,
+            Daily = Annual / 365)
+rm(tmp)
+```
+
+All Values are still in millions of gallons per day.
+
+
+## Compare Results to DEP Summary Data
+# Load DEP Summary Data
+The Summary Tab includes data on the SAPPI discharge, which is not a typical 
+municipal WWTF, so perhaps should not be included here. Westbrook IS a 
+municipal WWTF, but discharges to the Presumpscot River, which is included in 
+our tracking of river discharges. To avoid double counting, we should not use it
+here.
+
+We also note that the summary TN concentrations in the summary table are based
+on older (principally 2008) data, and have not been updated with the newer 
+information.  We discard those data in favor of updated information
+
+```{r}
+fn <- "Curtis Bohlen 043021.xlsx"
+discharge_data <- read_excel(file.path(sibling, fn), sheet = 'summary', n_max = 7,
+                             col_types = c("text", 
+                                           "skip", "skip", 
+                                           "skip", "numeric", 
+                                           "skip", "numeric", 
+                                           "skip", "skip")) %>%
+  rename(Site            = `SAMPLE_POINT_ID`,
+         design_flow     = `DESIGN_FLOW_ MONTHLY_AVERAGE_2012-2016 (MGD)`,
+         avg_flow        = `MONTHLY_ AVG_ FLOW_2012-2016 (MGD)`) %>%
+  
+ filter(Site %in% c('FREEPORT', 'FALMOUTH',
+                    'YARMOUTH', 'SOUTH PORTLAND','PWD-EAST END')) %>%
+ mutate(Site = recode(Site, 'FREEPORT' = 'Freeport',
+                       'FALMOUTH' = 'Falmouth',
+                    'YARMOUTH'  = 'Yarmouth',
+                    'SOUTH PORTLAND' = 'South Portland', 
+                    'PWD-EAST END' = 'Portland EEWTF'))
+```
+```{r}
+tmp <- discharge_data %>%
+  select(-design_flow) %>%
+  rename(dep_flow = avg_flow) %>%
+    left_join(annual_data, by = c('Site' = 'site')) %>%
+  select(-Annual, -Monthly) %>%
+  rename(cbep_flow = Daily)
+tmp
+```
+
+```{r}
+ggplot(tmp, aes(dep_flow, cbep_flow)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth(method = 'lm') +
+  scale_x_log10() +
+  scale_y_log10()
+```
+It makes very little difference which flow estimate we select.
+
+
+## Export Data
+```{r}
+annual_discharges.csv
+```

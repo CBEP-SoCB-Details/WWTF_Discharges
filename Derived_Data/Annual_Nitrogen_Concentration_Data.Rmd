@@ -1,0 +1,288 @@
+---
+title: "Casco Bay WWTF Discharges 2016 through 2018"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership."
+date: "04/26/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+#Load libraries
+```{r}
+library(readxl)
+library(tidyverse)
+
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+# Read Data
+## Folder References
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent <- dirname(getwd())
+sibling <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+## Load Data
+```{r}
+fn <- "Curtis Bohlen 043021.xlsx"
+
+the_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
+  rename(Site = `Site ID`,
+         dt = Date,
+         nox = `Nitrate+Nitrite As N (MG/L)`,
+         tkn = `TKN (MG/L)`,
+         tn = `TN (CALC) (MG/L)`,
+         op = `Orthophosphate as P (MG/L)`,
+         tp = `TP (DIRECT) (MG/L)`) %>%
+  
+    
+  # We have some non-detects for TKN
+  mutate(tkn_val = as.numeric(tkn),
+         tkn_flag = grepl('<', tkn)) %>%
+  mutate(tkn_val = if_else(tkn_flag,
+                           as.numeric(substr(tkn, 2, nchar(tkn))),
+                           tkn_val)) %>%
+  rename(tkn_txt = tkn) %>%
+  
+  select(-op, -tp) %>%
+  mutate(Site = fct_recode(Site,
+                           Falmouth         = "FALMOUTH WWTP",
+                           Freeport         = "FREEPORT WWTP",
+                           `Portland EEWTF` = "PWD EAST END",
+                           Westbrook        = "PWD WESTBROOK",
+                           `South Portland` = "SOUTH PORTLAND WPCF",
+                           Yarmouth         = "YARMOUTH WWTP")) %>%
+  mutate(dt = as.Date(dt),
+         month = as.numeric(format(dt, format = '%m')),
+         month = factor(month, levels = 1:12, labels = month.abb),
+         year =  as.numeric(format(dt, format = '%Y')),
+         Site = factor(Site),
+         Site = fct_reorder(Site, tn, .desc = TRUE)) %>%
+  select(-tkn_txt) %>%
+  relocate(month, year, .after = dt) 
+```
+
+### Examine Data
+#### Does TN match sum of constituents?
+TN values are USUALLY, but not ALWAYS equal to the sum of TKN and NOx within
+rounding.  There is really only one truly awkward record, with a TN value of 26
+that does not match the sum, even approximately.  That is from South Portland 
+WWTF, 9/30/2019.
+```{r}
+the_data %>%
+  select(dt, tkn_val, tn, nox) %>%
+  mutate(check = (tn - (tkn_val + nox)) < 0.1) %>%
+  arrange(check) %>%
+  head()
+
+```
+
+In an e-mail exchange with Angie Brewer of Maine DEP, May 6, 2021, she confirms 
+that this was a transcription error, and the correct TN value should be 18.49.
+
+### Correct Error
+```{r}
+the_data <- the_data %>% 
+  mutate(tn = if_else(Site == 'South Portland WPCF' & 
+                        month == 'Sep' & 
+                        year == 2019,
+                      18.49, tn))
+```
+
+#### What years were data collected?
+We are not interested (here) in the Sea Meadows, Cape Elizabeth, Peaks Island, 
+or Westbrook plants. They are small plants, for which we lack discharge data.
+```{r}
+xtabs(~ year + month + Site, data = the_data,
+      drop.unused.levels = TRUE)
+```
+
+We see only a single possible duplicate -- South Portland, August 2016.  But
+that turns out to NOT be a true duplicate.  Both values are present with exactly 
+those dates, in both source data files.  We leave the values unchanged, but note
+that it may affect allocation of data to months, since one is early August, the 
+other late august, and there is no equivalent September 2016 sample.
+
+```{r}
+the_data %>%
+  filter(Site == 'South Portland', year == 2016, month == 'Aug')
+```
+
+## Filter to Primary Facilities
+```{r}
+the_data <- the_data %>%
+  filter(Site %in% 
+        c('Falmouth',  
+          'Freeport',   
+          'Portland EEWTF',
+          'South Portland',
+          'Yarmouth')) %>%
+  mutate(Site = factor(Site))
+```
+
+
+## Does Year Matter?
+```{r fig.width = 7, fig.height = 5}
+  ggplot(the_data, aes(month, tn, color = factor(year))) + 
+  geom_point() +
+  facet_wrap(~ Site) +
+  theme_cbep(base_size = 12)
+```
+For most sites, there is no evidence that discharge concentrations differ by
+year.  The exceptions are Yarmouth, where concentrations may have increased, and
+East End, where they a have clearly decreased.   We can formalize that quick
+assessment with linear models.
+
+```{r}
+lms <- 
+  the_data %>%
+  filter(Site %in% c('Falmouth',  
+          'Portland EEWTF',
+          'South Portland',
+          'Yarmouth')) %>%
+  group_by(Site) %>%
+  nest() %>%
+  mutate(lms = map(data, function(.x) lm(tn ~ factor(year), data = .x)))
+  names(lms$lms) <- lms$Site
+map(lms$lms, anova)
+rm(lms)
+```
+
+## Look at Portland Data
+A primary reason for requesting updated data from Maine DEP was because the
+Portland Water District invested in nitrogen optimization technology in 2017,
+and the older data we had did not consider reductions in discharges that has 
+made possible.
+
+Those investments clearly led to significant reductions in discharges.
+
+# Calculate "Typical" Concentrations
+In preliminary review, we found standard deviations scale with medians and
+means. There is little difference in these data between medians and means.
+Since we are adding up totals, we prefer the means, because calculating the mean
+is a linear function.
+
+## Assemble Summary Tibble
+```{r}
+sum_tn <- the_data %>% 
+  group_by(Site) %>%
+  summarize(tn_n = sum(! is.na(tn)),
+            tn_mn = mean(tn, na.rm = TRUE),
+            tn_sd = sd(tn, na.rm = TRUE),
+            tn_se = tn_sd / sqrt(tn_n)) %>%
+  filter(Site %in% 
+           c('Falmouth',  
+             'Freeport',   
+             'Portland EEWTF',
+             'South Portland',
+             'Yarmouth'))
+```
+
+## Add Alternate East End Values
+We need to address the fact that our data on East End WWTF discharges 
+relies on data from summer months only.  We will use these data to estimate
+annual loadings.  That's a problem.
+
+The challenge  is that PWD runs nitrogen optimization seasonally, because
+the process depends on warm water to allow bacterial action.  No nitrogen
+optimization occurs in winter months (generally, November through mid May).
+ 
+As a result, summer discharges are not representative of year-round discharges.  
+but we only have data from summer months.
+
+We have three possible estimates of East End monthly discharges:
+
+1.  An average based only on recent (2018 and 2019) data  This will
+    underestimate annual loading, because summer discharges are significantly 
+    lower than winter discharges.
+    
+2.  An average based on three years of data (2008, 2018 2019).  If the 2008 
+    data represents "typical" discharge concentrations in the absence of 
+    nitrogen optimization, this average effectively weights summer (reduced
+    discharge) values from 2018 and 2019 twice as heavily as our best estimate of
+    winter (higher discharge) values.
+    
+3.  A weighted average, in which we weight the 2008 data twice as heavily as we
+    weight the more recent data.  This correctly applies out "best guess" winter 
+    discharge concentration estimate -- from 2008 -- and out "best guess" summer 
+    discharge concentrations -- from 20118 and 2019 -- equally.  This should
+    provide the best estimate of winter + summer discharges.
+    
+We believe option # 3 provides the best summary of annual discharges, but
+that choice is not the only reasonable one available to us.  This is not a 
+purely statistical choice, but is based on our understanding of EEWTF 
+operations.
+
+### Calculate Weighted Sum
+First, we calculate mean values for each group.
+```{r}
+alt_data <- the_data %>%
+  filter(Site == 'Portland EEWTF') %>%
+  mutate(was_2008 = year == 2008) %>%
+
+  # 
+  group_by(was_2008) %>%
+  summarize(tn_n = sum(! is.na(tn)),
+            tn_mn = mean(tn, na.rm = TRUE),
+            tn_var = var(tn, na.rm = TRUE) / tn_n,
+            .groups = 'drop')
+alt_data
+```
+
+That clearly shows the value of PWD's nitrogen optimization.  Over the months 
+with available data, PWD has reduced TN discharges by 
+`r round(1 - alt_data$tn_mn[1]/ alt_data$tn_mn[2]`,3)*100` percent. That
+comparison is not entirely apt, however, as it includes periods of time when
+nitrogen optimization is not possible, especially in May.
+
+Then we calculate a weighted mean of those averages and its variance.  Here we
+calculate the average of those averages, even though they are based on different
+numbers of observations.  We propagate the error, using the general form of
+the variance of a linear combination of random variables.
+
+$$\text {For } Y = \sum_{i=1}^{n}a_iXi \\
+\bar{Y} = \sum_{i=1}^{n}a_i \bar{Xi} \\
+\sigma^2_y = var(Y) = var(\sum_{i=1}^{n}a_iXi) = 
+\sum_{i=1}^{n}a_i^2var(Xi) = \sum_{i=1}^{n}a_i^2 \sigma^2_{X_i}
+$$
+
+```{r} 
+alt_data <- alt_data %>% 
+  
+  summarize(tn_n = sum(tn_n),
+            tn_mn = sum(tn_mn/2),   
+            tn_var = sum(tn_var/4),    # Variance of sum is sum of variances, 
+                                       # but you have to square the linear coefficients
+            tn_se = sqrt(tn_var))  %>%
+  select(-tn_var) %>%
+  mutate(Site = 'Portland EEWTF, Seasonally Weighted')
+```
+
+### Add Row to Data
+```{r}
+sum_tn <- sum_tn %>%
+ bind_rows(alt_data) 
+```
+
+# Save Annual Average TN Concetrations
+```{r}
+write_csv(sum_tn, 'Annual_Summary_TN.csv')
+```
