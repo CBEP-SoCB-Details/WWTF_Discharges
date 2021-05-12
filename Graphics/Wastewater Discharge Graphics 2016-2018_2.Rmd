@@ -20,8 +20,7 @@ knitr::opts_chunk$set(fig.align = 'center',
 ```
 
 #Load libraries
-```{r}
-library(readr)
+```{r load_libraries}
 library(readxl)
 library(tidyverse)
 
@@ -41,7 +40,7 @@ dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 
 ## Folder References
 ## Load Data
-```{r}
+```{r load_data}
 fn <- "Total_Discharge_Volumes.xlsx"
 
 the_data <- read_excel(file.path(sibling, fn), skip = 5,
@@ -58,21 +57,17 @@ the_data <- read_excel(file.path(sibling, fn), skip = 5,
          Site = fct_reorder(Site, Avg, .desc = TRUE))
 ```
 
-```{r}
+```{r check_dates}
   unique(the_data$dt)
 ```
 
 ## Limit To Two Years of Data
-```{r}
+```{r select_two_years}
 the_data <- the_data %>%
   filter(dt > as.Date("2016-07-01"))
 ```
 
-```{r}
-unique(the_data$dt)
-```
-
-```{r}
+```{r plot_monthly_flows}
 plt <- ggplot(the_data, aes(dt, Avg, color = Site)) + 
   geom_line() + 
   scale_y_log10() +
@@ -90,11 +85,13 @@ plt <- ggplot(the_data, aes(dt, Avg, color = Site)) +
 plt
 ```
 
-```{r}
+```{r plot_flows_by_month}
 plt <- ggplot(the_data) + 
   aes(as.numeric(month),Avg, color = Site) + 
   geom_point() + 
-  geom_smooth(se = FALSE) + 
+  geom_smooth(method = 'gam', 
+              formula = y~ s(x, bs = 'cc'),  # Force periodic fits
+              se = FALSE) + 
   scale_y_log10() + 
   scale_x_continuous(limits=c(1,12), breaks = c(3,6,9,12)) +
   xlab('Month') + 
@@ -106,39 +103,33 @@ plt <- ggplot(the_data) +
 plt
 ```
 
-# Calculate Annual Totals
-## Method 1 (Not very useful)
-Problem with the following is that the discharges for both 2016 and 2018 are 
-for partial years. Looking at annual totals, without scaling is therefore
-misleading.
-```{r}
-monthdays <- c(31, 28, 31, 30,31,30, 31, 31, 30, 31, 30, 31)
-tmp <- the_data %>% 
-  mutate(MonthTot= Avg * monthdays[as.numeric(month)])
-annual_data<- tmp %>% 
-  select(Site, year, Avg, MonthTot) %>% 
-  group_by(Site, year) %>% 
-  summarise(Annual = sum(MonthTot, na.omit = TRUE)) %>%
-  mutate(Site = fct_reorder(Site, Annual, .desc = TRUE))
-rm(tmp)
-```
+```{r plot_daily_discharges, fig.}
+plt <- ggplot(the_data, aes(Site, Avg)) + 
+  stat_summary(geom = 'col', fill = cbep_colors()[4]) +
+  # stat_summary(geom = 'linerange',
+  #              fun.data = "mean_cl_normal",
+  #              size = 1, col = cbep_colors()[3]) + 
 
-### Related Gaphic
-```{r}
-ggplot(annual_data, aes(year, Annual, fill = Site)) +
-  geom_col(position = position_dodge()) +
+  xlab('Month') + 
+  ylab('Discharge (MGD)')  +
 
-  xlab('') + 
-  ylab('Annual Discharge (MG)')  +
-  scale_fill_viridis_d(name = '') +
   theme_cbep(base_size = 12) +
   theme(legend.position = 'bottom', 
-        legend.text = element_text(size = 10)) +
-  guides(fill = guide_legend(ncol = 2))
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +
+  annotate("text", x = 6, y = 13,  size = 3.5,
+            label = 'Based on data from\nAugust 2016 through July 2018')
+plt
+ggsave('figures/daily_discharges.pdf', device = cairo_pdf, 
+       width = 5, height = 4)
 ```
 
-## Method 2: Averaging over 24 Months
-```{r}
+
+
+# Calculate Annual Totals
+Averaging over 24 Months:
+```{r calculate_annual_totals}
+monthdays <- c(31, 28, 31, 30,31,30, 31, 31, 30, 31, 30, 31)
 tmp <- the_data %>% 
   mutate(MonthTot= Avg * monthdays[as.numeric(month)])
 annual_data<- tmp %>% 
@@ -150,11 +141,11 @@ rm(tmp)
 ```
 
 ### Related Graphic
-```{r}
+```{r plot_annual_totals}
 ggplot(annual_data, aes(Site, Annual_Avg)) +
   geom_col(position = position_dodge(), fill = cbep_colors()[2]) +
   xlab('') + 
-  ylab('Average Annual Discharge\nMillions of Gallons ')  +
+  ylab('Annual Discharge\nMillions of Gallons ')  +
   scale_y_continuous(labels = scales::comma_format()) +
   theme_cbep(base_size = 12) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +

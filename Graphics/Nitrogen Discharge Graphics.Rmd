@@ -20,8 +20,7 @@ knitr::opts_chunk$set(fig.align = 'center',
 ```
 
 #Load libraries
-```{r}
-library(readr)
+```{r load libraries}
 library(readxl)
 library(tidyverse)
 
@@ -42,9 +41,15 @@ sibling <- file.path(parent,sibfldnm)
 dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 ```
 
-# Load Data
-## Raw Data
-```{r}
+## Load Raw Data
+We have a handful of non-detects for TKN, so we need to read data in as text
+and convert to numeric values, skipping the '<' sign included in the data
+source.  We add the `tkn_flag` variable to track which values are non-detects.
+The impact in this setting (since we do not estimate expected values of the
+non-detects because data is sparse) is that we effectively replace non-detects
+with their detection limits, which will slightly over estimate true nitrogen 
+loads.
+```{r load_raw_data}
 fn <- "Curtis Bohlen 043021.xlsx"
 
 raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
@@ -55,9 +60,9 @@ raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
          tn = `TN (CALC) (MG/L)`,
          op = `Orthophosphate as P (MG/L)`,
          tp = `TP (DIRECT) (MG/L)`) %>%
-  
-    
-  # We have some non-detects for TKN
+  select(-op, -tp) %>%
+ 
+  # Address non-detects
   mutate(tkn_val = as.numeric(tkn),
          tkn_flag = grepl('<', tkn)) %>%
   mutate(tkn_val = if_else(tkn_flag,
@@ -65,7 +70,7 @@ raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
                            tkn_val)) %>%
   rename(tkn_txt = tkn) %>%
   
-  select(-op, -tp) %>%
+
   mutate(Site = fct_recode(Site,
                            Falmouth         = "FALMOUTH WWTP",
                            Freeport         = "FREEPORT WWTP",
@@ -84,7 +89,9 @@ raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
 ```
 
 ### Correct Error in Source Data
-```{r}
+Angie Brewer of Maine DEP confirmed a transcription error in the data, we
+correct that here.
+```{r correct_data_error}
 raw_data <- raw_data %>% 
   mutate(tn = if_else(Site == 'South Portland WPCF' & 
                         month == 'Sep' & 
@@ -93,7 +100,7 @@ raw_data <- raw_data %>%
 ```
 
 ## Assemble Summary Tibble
-```{r}
+```{r assemble_summary}
 sum_tn <- raw_data %>% 
   group_by(Site) %>%
   summarize(tn_n = sum(! is.na(tn)),
@@ -109,43 +116,28 @@ sum_tn <- raw_data %>%
 ```
 
 ### Add Alternate East End Values
-We need to address the fact that our data on East End WWTF discharges 
-relies on data from summer months only.  We will use these data to estimate
-annual loadings.  That's a problem.
+We need to address the fact that our data on East End WWTF concentration data 
+is from summer months only.  We plan to use our estimates of 
+nitrogen concentrations to estimate annual loading. That's a problem.
 
 The challenge  is that PWD runs nitrogen optimization seasonally, because
 the process depends on warm water to allow bacterial action.  No nitrogen
 optimization occurs in winter months (generally, November through mid May).
  
-As a result, summer discharges are not representative of year-round discharges.  
-but we only have data from summer months.
-
-We have three possible estimates of East End monthly discharges:
-
-1.  An average based only on recent (2018 and 2019) data  This will
-    underestimate annual loading, because summer discharges are significantly 
-    lower than winter discharges.
-    
-2.  An average based on three years of data (2008, 2018 2019).  If the 2008 
-    data represents "typical" discharge concentrations in the absence of 
-    nitrogen optimization, this average effectively weights summer (reduced
-    discharge) values from 2018 and 2019 twice as heavily as our best estimate of
-    winter (higher discharge) values.
-    
-3.  A weighted average, in which we weight the 2008 data twice as heavily as we
-    weight the more recent data.  This correctly applies out "best guess" winter 
-    discharge concentration estimate -- from 2008 -- and out "best guess" summer 
-    discharge concentrations -- from 20118 and 2019 -- equally.  This should
-    provide the best estimate of winter + summer discharges.
+A weighted average, in which we weight the 2008 data twice as heavily as we
+weight the more recent data correctly applies our "best guess" winter 
+concentration estimate (from 2008) to half the year and our "best guess"
+summer discharge concentrations (from 2018 and 2019) to the other half of the 
+year.
 
 #### Calculate Weighted Sum
-First, we calculate mean values for each group.
-```{r}
+First, we calculate mean values for each group. Note that summer concentrations
+of TN at East End are now well under half what they were in 2008.
+```{r calc_recent_vs_2008_avgs}
 alt_data <- raw_data %>%
   filter(Site == 'Portland EEWTF') %>%
   mutate(was_2008 = year == 2008) %>%
 
-  # 
   group_by(was_2008) %>%
   summarize(tn_n = sum(! is.na(tn)),
             tn_mn = mean(tn, na.rm = TRUE),
@@ -154,47 +146,54 @@ alt_data <- raw_data %>%
 alt_data
 ```
 
+Portland
+Water District reports higher net reductions due to nitrogen optimization.  The
+difference probably reflects the fact that our estimate of current mean
+concentrations applies over the entire monitoring season , and thus
+includes some periods when nitrogen optimization did not occur.
 
-Then we calculate a weighted mean of those averages and its variance.  Here we
-calculate the average of those averages, even though they are based on different
-numbers of observations.  We propagate the error too, using the general form of
-the variance of a linear combination of random variables.
+#### Calculate Estimate  and its Variance
+Then we calculate the average of those averages and its variance.  The two 
+averages are based on different numbers of observations, so their uncertainties 
+differ.  We propagate the error using the general form of the variance of a 
+linear combination of random variables.
 
-$$\text {For } Y = \sum_{i=1}^{n}a_iXi \\
+$$
+\text {For } Y = \sum_{i=1}^{n}a_iXi \\
 \bar{Y} = \sum_{i=1}^{n}a_i \bar{Xi} \\
 \sigma^2_y = var(Y) = var(\sum_{i=1}^{n}a_iXi) = 
 \sum_{i=1}^{n}a_i^2var(Xi) = \sum_{i=1}^{n}a_i^2 \sigma^2_{X_i}
 $$
-
-```{r} 
+#### Combine Data
+```{r calc_weighted_mean} 
 alt_data <- alt_data %>% 
-    
-    
   summarize(tn_n = sum(tn_n),
             tn_mn = sum(tn_mn/2),   
             tn_var = sum(tn_var/4),    # Variance of sum is sum of variances, 
-                                       # but you have to square the linear coefficients
+                                       # but with a linear combination, you have 
+                                       # to square the coefficients
             tn_se = sqrt(tn_var))  %>%
   select(-tn_var) %>%
   mutate(Site = 'Portland EEWTF\nSeasonally Weighted')
   
 sum_tn <- sum_tn %>%
- bind_rows(alt_data) 
+ bind_rows(alt_data)
 rm(alt_data)
 ```
 
 # Load DEP Summary Data
-The Summary Tab includes data on the SAPPI discharge, which is not a typical 
-municipal WWTF, so perhaps should not be included here. Westbrook IS a 
-municipal WWTF, but discharges to the Presumpscot River, which is included in 
-our tracking of river discharges. To avoid double counting, we should not use it
-here.
+The Summary Tab in the original DEP excel spreadsheet includes data on the 
+SAPPI and Westbrook plants.  Both discharge to the Presumpscot, so related 
+nutrient loads should be tracked via riverine inputs to the Bay.  Moreover,
+SAPPI is not a typical municipal WWTF, so arguably should not be 
+included anyway.  We drop both plants.
 
-We also note that the summary TN concentrations in the summary table are based
-on older (principally 2008) data, and have not been updated with the newer 
-information.  We discard those data in favor of updated information
+We also note that the summary TN concentrations in the DEP summary data are
+based on older (principally 2008) data, and have not been updated with the newer
+information.  We discard those data in favor of the updated information
+assembled from the raw data.
 
-```{r}
+```{r load_dep_summary_data}
 discharge_data <- read_excel(file.path(sibling, fn), sheet = 'summary', n_max = 7,
                              col_types = c("text", 
                                            "skip", "skip", 
@@ -208,9 +207,6 @@ discharge_data <- read_excel(file.path(sibling, fn), sheet = 'summary', n_max = 
  filter(Site %in% c('FREEPORT', 'FALMOUTH',
                     'YARMOUTH', 'SOUTH PORTLAND','PWD-EAST END'))
 
-```
-
-```{r}
 # Add a row for the supplementary estimate.
 discharge_data[6,] <- discharge_data [5,]
 discharge_data$Site[6] <- 'Portland EEWTF\nSeasonally Weighted'
@@ -222,20 +218,13 @@ discharge_data <- discharge_data %>%
                            Yarmouth       = 'YARMOUTH',
                            `South Portland` = 'SOUTH PORTLAND',
                            `Portland EEWTF` = 'PWD-EAST END'
-                           )) %>%
-  filter(Site %in% 
-           c('Falmouth',  
-             'Freeport',   
-             'Portland EEWTF',
-             'South Portland',
-             'Yarmouth',
-             'Portland EEWTF\nSeasonally Weighted'))
+                           ))
 ```
 
 # Combine Summary Data
 ## Unit Conversions
-
-$$ V \text{ (liters per day)} = V(\text{ (Million gallons per day)} \times  
+$$ 
+V \text{ (liters per day)} = V(\text{ (Million gallons per day)} \times  
     3.78541 \text{ (l/gal)} \times 10^6 \text{ (liters / million liter)}
 
 $$
@@ -252,7 +241,8 @@ $$
  L (kg/day) = C (kg/l) \times V (l / day) =
 $$
  
-$$   L (kg/day) = 
+$$
+L (kg/day) = 
     V(\text{ (Million gallons per day)} \times  
     3.78541 \text{ (l/gal)} \times 10^6 \text{ (liters / million liter)}
     \times \\
@@ -261,7 +251,6 @@ $$   L (kg/day) =
     \times  10^{-3} \text{ kg/ g}
 
 $$
-
 
 Note that the factors of 1000 cancel out, so in net:
 
@@ -272,7 +261,7 @@ tn_load in pounds per day = volume * 3.78541 (MGD) * 2.20462 lb/kg * concentrati
 (Note that the calculations Angela Brewer prepared calculate loads in pounds
 per day).
 
-```{r}
+```{r combine_data}
 l_p_gal <- 3.78541
 lb_p_kg <- 2.20462
 
@@ -282,21 +271,19 @@ combined_summary <- discharge_data %>%
          tn_load_at_design_lb = design_flow * tn_mn * l_p_gal * lb_p_kg,
          tn_load_avg_kg = avg_flow * tn_mn * l_p_gal,
          tn_load_avg_lb = avg_flow * tn_mn * l_p_gal * lb_p_kg,
-         tn_load_avg_mtpy = tn_load_avg_kg * 365 / 1000) %>%
-  mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = TRUE))
+         tn_load_avg_mtpy = tn_load_avg_kg * 365 / 1000)
 ```
 
 # Preliminary Plots
 ## Timing of N Concentration Data
-```{r}
+```{r timing_plot}
 plt <-  raw_data %>%
     filter(Site %in% 
            c('Falmouth',  
              'Freeport',   
              'Portland EEWTF',
              'South Portland',
-             'Yarmouth',
-             'Portland EEWTF\nSeasonally Weighted')) %>%
+             'Yarmouth')) %>%
   ggplot(aes(dt, tn, color = Site)) + 
   geom_point() +
   scale_x_date(date_breaks = '2 years', date_labels = '%Y') +
@@ -311,33 +298,10 @@ plt
 ```
 So about half of the Total Nitrogen data is from 2008.  That is far from up to 
 date....
- tab. In fact, the "Summary" tab
-
-## Summary Data
-### Daily Discharge
-```{r fig.width = 3, fig.height = 4}
-plt <- combined_summary %>%
-  filter(Site != 'Portland EEWTF') %>%
-  mutate(Site = fct_reorder(factor(Site), avg_flow, .desc = TRUE)) %>%
-  ggplot(aes(Site, avg_flow)) + 
-  geom_col(fill = cbep_colors()[4]) + 
-  #scale_y_log10() + 
-  ylab('Average Discharge (MGD)')  +
-  scale_color_manual(values = cbep_colors(), name = '') +
-  theme_cbep(base_size = 12) +
-  theme(legend.position = 'bottom', 
-        axis.text.x= element_text(size = 10, angle =90, hjust = 1, vjust = 0.25))
-plt
-
-ggsave('figures/avg_daily_discharges.pdf', device = cairo_pdf, 
-       width = 3, height = 43)
-```
-
 
 ### TN Concentration
-```{r fig.width = 3, fig.height = 4}
+```{r tn_conc_plot, fig.width = 3, fig.height = 4}
 plt <-combined_summary %>%
-  filter(Site != 'Portland EEWTF') %>%
   mutate(Site = fct_reorder(factor(Site), avg_flow, .desc = TRUE)) %>%
   ggplot(aes(Site, tn_mn)) + 
   geom_col(fill = cbep_colors()[2]) + 
@@ -349,62 +313,132 @@ plt <-combined_summary %>%
         axis.text.x= element_text(size = 10, angle =90, hjust = 1, vjust = 0.25))
 plt
 ```
+Note that selection of alternative estimates for average annual concentration 
+from East End changes out Portland estimate by 15% or so:
 
-### TN Discharge - Daily, KG
-```{r fig.width = 3, fig.height = 4}
-plt <- combined_summary %>%
+```{r Portland_tn_ests_ratio}
+combined_summary$tn_mn[combined_summary$Site == 
+                         'Portland EEWTF\nSeasonally Weighted'] /
+combined_summary$tn_mn[combined_summary$Site == 
+                         'Portland EEWTF']
+```
+
+## Delete Unused Portland Estimator
+For consistency and simplicity in our final graphics,
+we use the seasonally weighted Portland estimate, and rename it.
+```{r delete_extra_est}
+combined_summary <- combined_summary %>%
   filter(Site != 'Portland EEWTF') %>%
-  mutate(Site = fct_reorder(factor(Site), avg_flow, .desc = TRUE)) %>%
-  
+  mutate(Site = if_else(Site == 'Portland EEWTF\nSeasonally Weighted',
+                        'Portland',
+                        as.character(Site))) %>%
+  mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = TRUE))
+```
+
+# Final Graphics
+## Daily Discharge
+```{r daily_discharge_plot, fig.width = 2.5, fig.height = 3.5}
+plt <- combined_summary %>%
+  ggplot(aes(Site, avg_flow)) + 
+  geom_col(fill = cbep_colors()[4]) + 
+  #scale_y_log10() + 
+  ylab('Discharge (MGD)')  +
+  xlab('') +
+  scale_color_manual(values = cbep_colors(), name = '') +
+  theme_cbep(base_size = 12) +
+  theme(legend.position = 'bottom', 
+        axis.text.x= element_text(size = 9, angle =90, hjust = 1, vjust = 0.25),
+        axis.title.y = element_text(size = 10))
+plt
+
+ggsave('figures/daily_discharges_five_sites.pdf', device = cairo_pdf, 
+       width = 2.5, height = 3.5)
+```
+
+## TN Concentration
+```{r tn_plot, fig.width = 2.5, fig.height = 3.5}
+plt <-combined_summary %>%
+  ggplot(aes(Site, tn_mn)) + 
+  geom_col(fill = cbep_colors()[2]) + 
+  #scale_y_log10() + 
+  ylab('Total Nitrogen (mg/l)')  +
+  xlab('') +
+  scale_color_manual(values = cbep_colors(), name = '') +
+  theme_cbep(base_size = 12) +
+  theme(legend.position = 'bottom', 
+        axis.text.x= element_text(size = 10, angle =90, hjust = 1, vjust = 0.25),
+        axis.title.y= element_text(size = 10))
+plt
+ggsave('figures/average_tn.pdf', device = cairo_pdf, 
+       width = 2.5, height = 3.5)
+```
+
+## TN Discharge - Daily, KG
+```{r tn_discharge_plot_kg, fig.width = 2.5, fig.height = 3.5}
+plt <- combined_summary %>%
   ggplot(aes(Site, tn_load_avg_kg)) + 
-  geom_col(fill = cbep_colors()[5]) + 
-  
+  geom_col(fill = cbep_colors()[6]) + 
   
   #scale_y_log10() + 
-  ylab('Annual TN Discharges\n (kg/day)')  +
+  ylab('TN Discharge Rate\n (kg/day)')  +
   xlab('') +
   
   theme_cbep(base_size = 12) +
   theme(axis.text.x= element_text(angle = 90, vjust = 0.25, hjust = 1),,
-        legend.key.size = unit(0.2, 'in'),
-        legend.text = element_text(size = 9))
+        axis.title.y= element_text(size = 10))
 plt
+ggsave('figures/tn_discharges_kg.pdf', device = cairo_pdf, 
+       width = 2.5, height = 3.5)
 ```
 
-### TN Discharges -- Annual, Metric Tons
-```{r fig.width = 3, fig.height = 4}
+## TN Discharges -- Daily, Pounds
+```{r tn_discharge_plot_lbs, fig.width = 2.5, fig.height = 3.5}
 plt <- combined_summary %>%
-   filter(Site != 'Portland EEWTF') %>%
-   mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
-  
-  filter(Site != 'SAPPI' & Site != 'Westbrook') %>%
-  mutate(Site = fct_reorder(factor(Site), tn_load_avg_lb, .desc = TRUE)) %>%
-  
+
   ggplot(aes(Site, tn_load_avg_lb)) + 
   geom_col(fill = cbep_colors()[6]) + 
   
   #scale_y_log10() + 
-  ylab('Total Nitrogen (lbs/day)')  +
-  scale_color_manual(values = cbep_colors(), name = '') +
+  ylab('TN Discharge Rate\n(lbs/day)')  +
+  xlab('') +
+  
   theme_cbep(base_size = 12) +
-  theme(legend.position = 'bottom', 
-        axis.text.x= element_text(size = 10, angle =90, hjust = 1, vjust = 0.25))
+  theme(axis.text.x= element_text(angle =90, hjust = 1, vjust = 0.25),
+        axis.title.y= element_text(size = 10))
 plt
-#ggsave('figures/average_tn_discharges.pdf', device = cairo_pdf, 
-#       width = 5, height = 4)
+ggsave('figures/tn_discharges_lbs.pdf', device = cairo_pdf, 
+       width = 2.5, height = 3.5)
 ```
 
-### TN Loads, Annual, Metric Tons --Stacked Bar
-```{r fig.width = 3.25, fig.height = 3}
+## TN Discharges -- Annual, Metric Tons
+```{r tn_annual_plot, fig.width = 2.5, fig.height = 3.5}
 plt <- combined_summary %>%
-  filter(Site != 'Portland EEWTF') %>%
-   mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
+
+  ggplot(aes(Site, tn_load_avg_mtpy)) + 
+  geom_col(fill = cbep_colors()[6]) + 
+  
+  #scale_y_log10() + 
+  ylab('Annual TN Discharge\n(Metric Tons)')  +
+  xlab('') +
+  
+  theme_cbep(base_size = 12) +
+  theme(axis.text.x= element_text(angle =90, hjust = 1, vjust = 0.25),
+        axis.title.y= element_text(size = 10))
+plt
+ggsave('figures/tn_discharges_annual.pdf', device = cairo_pdf, 
+       width = 2.5, height = 3.5)
+```
+
+## TN Loads, Annual, Metric Tons -- Stacked Bar
+```{r tn_annual_stacked, fig.width = 3, fig.height = 3}
+plt <- combined_summary %>%
+  mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
   
   ggplot(aes(1, tn_load_avg_mtpy, fill = Site)) + 
   geom_col() + 
   
   #scale_y_log10() + 
-  ylab('Annual TN Discharges\n(metric tons)')  +
+  ylab('Annual TN Discharge\n(metric tons)')  +
   xlab('') +
   
   scale_fill_manual(values = cbep_colors(), name = '') +
@@ -413,12 +447,10 @@ plt <- combined_summary %>%
         axis.ticks.x = element_blank(),
         legend.key.size = unit(0.2, 'in'),
         legend.text = element_text(size = 9))
-plt
 ```
 
-
 ### Add Totals Annotation
-```{r fig.width = 3.25, fig.height = 3}
+```{r final_tn_annual_plot, fig.width = 2.9, fig.height = 3}
 total <- combined_summary %>%
   filter(Site != 'Portland EEWTF') %>%
   select(tn_load_avg_mtpy) %>%
@@ -426,35 +458,21 @@ total <- combined_summary %>%
   pull(total)
 
 
-plt <- combined_summary %>%
-   filter(Site != 'Portland EEWTF') %>%
-   mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
-  
-  ggplot(aes(1, tn_load_avg_mtpy, fill = Site)) + 
-  geom_col() + 
-  
-  #scale_y_log10() + 
-  ylab('Total Nitrogen\n(Metric Tons per Year)')  +
-  xlab('') +
-  
-  scale_fill_manual(values = cbep_colors(), name = '') +
-  theme_cbep(base_size = 12) +
-  theme(axis.text.x= element_blank(),
-        axis.ticks.x = element_blank(),
-        legend.key.size = unit(0.2, 'in'),
-        legend.text = element_text(size = 9)) +
+plt2 <- plt +
   ylim(0, 1.1 * total) +
   annotate('text', x = 1, y = 1.045 * total, 
             label = paste(round(total), 'MT'), 
-            size = 3)
+            size = 3) +
+  labs(caption = 'Wastewater Discharges')  +
+  theme(plot.caption = element_text(hjust=0, size = 12))
 
-plt
+plt2
 ggsave('figures/annual_tn_loads.pdf', device = cairo_pdf, 
-       width = 3.2, height = 3)
+       width = 2.9, height = 3)
 ```
 
 # Waffle Plot of WWTF Nitrogen
-```{r}
+```{r waffle_data}
 total <- combined_summary %>%
   filter(Site != 'Portland EEWTF') %>%
     summarize(total = sum(tn_load_avg_mtpy)) %>%
@@ -465,16 +483,22 @@ waf_dat<-  combined_summary %>%
   mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
   select(Site, tn_load_avg_mtpy) %>%
   mutate(tn_pct = tn_load_avg_mtpy / total,
-         tn_pct = round(tn_pct / sum(tn_pct), 5))
+         tn_pct = tn_pct / sum(tn_pct))
 
-(waf_vec =  round(waf_dat$tn_pct,2))
+(waf_vec <-  round(waf_dat$tn_pct,2))
+# Roundin means that does not add to 100, and we need it to add to
+# 100 to generate and "even" waffle grid, so we rescale by rounded
+# totals.
 
-names(waf_vec) = waf_dat$Site
+tot <- sum(waf_vec)
+(waf_vec_2 = round(waf_vec/tot,2))
+
+names(waf_vec_2) = waf_dat$Site
 ```
 
-```{r fig.width = 4, fig.height = 4}
-waffle(waf_vec * 50,                     # data
-        colors=cbep_colors()[1:5],  # colors
+```{r waffle_plot, fig.width = 4, fig.height = 4}
+waffle(waf_vec_2 * 100,                     # data
+       colors=cbep_colors()[1:5],  # colors
        rows = 5,                    # row number 
        size = 0,
        legend_pos = 'right',
@@ -482,7 +506,7 @@ waffle(waf_vec * 50,                     # data
   guides(fill =  guide_legend(nrow = 5)) +
   theme(legend.text = element_text(family = 'Montserrat', size = 10),
         legend.key.size = unit(.2, 'inch')) +
-  annotate('text', size = 3, hjust = 0, color = 'white',
+  annotate('text', size = 3, hjust = 0, color = 'gray15',
            x = 0.75, y = 20,
            label = paste('Total =', round(total), 'MT')) #+
   #labs(subtitle = "Annual Nitrogen Loads\nFrom Wastewater Facilities")

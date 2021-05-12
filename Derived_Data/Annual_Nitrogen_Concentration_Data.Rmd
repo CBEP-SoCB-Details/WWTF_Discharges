@@ -37,7 +37,7 @@ sibfldnm <- 'Original_Data'
 parent <- dirname(getwd())
 sibling <- file.path(parent,sibfldnm)
 
-dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+#dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 ```
 
 ## Load Data
@@ -197,34 +197,44 @@ sum_tn <- the_data %>%
 ```
 
 ## Add Alternate East End Values
-We need to address the fact that our data on East End WWTF discharges 
-relies on data from summer months only.  We will use these data to estimate
-annual loadings.  That's a problem.
+We need to address the fact that our data on East End WWTF concentration data 
+is from summer months only.  We plan to use our estimates of 
+nitrogen concentrations to estimate annual loading. That's a problem.
 
 The challenge  is that PWD runs nitrogen optimization seasonally, because
 the process depends on warm water to allow bacterial action.  No nitrogen
 optimization occurs in winter months (generally, November through mid May).
  
 As a result, summer discharges are not representative of year-round discharges.  
-but we only have data from summer months.
+but we only have data from summer months, because those are the months with
+nutrient limitations in the EEWTF permit.
 
-We have three possible estimates of East End monthly discharges:
+Given available data, we have three reasonable direct estimates of East End 
+annual average monthly concentrations:
 
-1.  An average based only on recent (2018 and 2019) data  This will
-    underestimate annual loading, because summer discharges are significantly 
-    lower than winter discharges.
+1.  An average based only on recent (2018 and 2019) data. This will
+    underestimate annual loading, because summer concentrations are 
+    substantially lower than winter concentrations
     
-2.  An average based on three years of data (2008, 2018 2019).  If the 2008 
-    data represents "typical" discharge concentrations in the absence of 
-    nitrogen optimization, this average effectively weights summer (reduced
-    discharge) values from 2018 and 2019 twice as heavily as our best estimate of
-    winter (higher discharge) values.
+2.  An average based on all available data, from three years (2008, 2018 2019). 
+    If the 2008 data represents "typical" discharge concentrations in the 
+    absence of nitrogen optimization, this average effectively weights summer
+    (reduced concentration) values (from 2018 and 2019) twice as heavily as our 
+    best estimate of winter (higher concentration) values (from 2008 data).
     
 3.  A weighted average, in which we weight the 2008 data twice as heavily as we
-    weight the more recent data.  This correctly applies out "best guess" winter 
-    discharge concentration estimate -- from 2008 -- and out "best guess" summer 
-    discharge concentrations -- from 20118 and 2019 -- equally.  This should
-    provide the best estimate of winter + summer discharges.
+    weight the more recent data.  This correctly applies our "best guess" winter 
+    concentration estimate -- from 2008 -- and our "best guess" summer 
+    discharge concentrations -- from 2018 and 2019 -- equally. This provides a
+    better estimate of winter + summer discharges.
+
+As an alternative, we could also calculate discharges on a monthly (rather than
+annual) basis, applying monthly summer average concentrations from 2018 and 2019, 
+and winter average concentrations (either averaged, or month-by-month) from
+2008. Perhaps a Monte Carlo procedure could allow estimation of precision too.
+However, all this added complexity would little alter annual load estimates.
+Besides, that approach makes less sense for other plants, where we have no clear
+evidence of seasonal changes in concentrations.
     
 We believe option # 3 provides the best summary of annual discharges, but
 that choice is not the only reasonable one available to us.  This is not a 
@@ -249,10 +259,16 @@ alt_data
 
 That clearly shows the value of PWD's nitrogen optimization.  Over the months 
 with available data, PWD has reduced TN discharges by 
-`r round(1 - alt_data$tn_mn[1]/ alt_data$tn_mn[2]`,3)*100` percent. That
+`r round(1 - alt_data$tn_mn[1]/ alt_data$tn_mn[2],3)*100` percent. That
 comparison is not entirely apt, however, as it includes periods of time when
 nitrogen optimization is not possible, especially in May.
 
+Portland Water District reports higher net reductions due to nitrogen
+optimization.  The difference probably reflects the fact that our estimate of
+current mean concentrations applies over the entire monitoring season , and thus
+includes some periods when nitrogen optimization did not occur.
+
+#### Calculate Estimate and its Variance
 Then we calculate a weighted mean of those averages and its variance.  Here we
 calculate the average of those averages, even though they are based on different
 numbers of observations.  We propagate the error, using the general form of

@@ -8,11 +8,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership.
     -   [Load Data](#load-data)
     -   [Limit To Two Years of Data](#limit-to-two-years-of-data)
 -   [Calculate Annual Totals](#calculate-annual-totals)
-    -   [Method 1 (Not very useful)](#method-1-not-very-useful)
-        -   [Related Gaphic](#related-gaphic)
-    -   [Method 2: Averaging over 24
-        Months](#method-2-averaging-over-24-months)
-        -   [Related Graphic](#related-graphic)
+    -   [Related Graphic](#related-graphic)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -21,15 +17,14 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership.
 \#Load libraries
 
 ``` r
-library(readr)
 library(readxl)
 library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
-#> v ggplot2 3.3.3     v dplyr   1.0.5
-#> v tibble  3.1.1     v stringr 1.4.0
-#> v tidyr   1.1.3     v forcats 0.5.1
-#> v purrr   0.3.4
+#> v ggplot2 3.3.3     v purrr   0.3.4
+#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
 #> Warning: package 'tibble' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
@@ -92,15 +87,6 @@ the_data <- the_data %>%
 ```
 
 ``` r
-unique(the_data$dt)
-#>  [1] "2016-08-01" "2016-09-01" "2016-10-01" "2016-11-01" "2016-12-01"
-#>  [6] "2017-01-01" "2017-02-01" "2017-03-01" "2017-04-01" "2017-05-01"
-#> [11] "2017-06-01" "2017-07-01" "2017-08-01" "2017-09-01" "2017-10-01"
-#> [16] "2017-11-01" "2017-12-01" "2018-01-01" "2018-02-01" "2018-03-01"
-#> [21] "2018-04-01" "2018-05-01" "2018-06-01" "2018-07-01"
-```
-
-``` r
 plt <- ggplot(the_data, aes(dt, Avg, color = Site)) + 
   geom_line() + 
   scale_y_log10() +
@@ -118,13 +104,15 @@ plt <- ggplot(the_data, aes(dt, Avg, color = Site)) +
 plt
 ```
 
-<img src="Wastewater-Discharge-Graphics-2016-2018_files/figure-gfm/unnamed-chunk-6-1.png" style="display: block; margin: auto;" />
+<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_monthly_flows-1.png" style="display: block; margin: auto;" />
 
 ``` r
 plt <- ggplot(the_data) + 
   aes(as.numeric(month),Avg, color = Site) + 
   geom_point() + 
-  geom_smooth(se = FALSE) + 
+  geom_smooth(method = 'gam', 
+              formula = y~ s(x, bs = 'cc'),  # Force periodic fits
+              se = FALSE) + 
   scale_y_log10() + 
   scale_x_continuous(limits=c(1,12), breaks = c(3,6,9,12)) +
   xlab('Month') + 
@@ -134,52 +122,44 @@ plt <- ggplot(the_data) +
   theme(legend.position = 'bottom', 
         legend.text = element_text(size = 10))
 plt
-#> `geom_smooth()` using method = 'loess' and formula 'y ~ x'
 ```
 
-<img src="Wastewater-Discharge-Graphics-2016-2018_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
+<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_flows_by_month-1.png" style="display: block; margin: auto;" />
+
+``` r
+plt <- ggplot(the_data, aes(Site, Avg)) + 
+  stat_summary(geom = 'col', fill = cbep_colors()[4]) +
+  # stat_summary(geom = 'linerange',
+  #              fun.data = "mean_cl_normal",
+  #              size = 1, col = cbep_colors()[3]) + 
+
+  xlab('Month') + 
+  ylab('Discharge (MGD)')  +
+
+  theme_cbep(base_size = 12) +
+  theme(legend.position = 'bottom', 
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +
+  annotate("text", x = 6, y = 13,  size = 3.5,
+            label = 'Based on data from\nAugust 2016 through July 2018')
+plt
+#> No summary function supplied, defaulting to `mean_se()`
+```
+
+<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_daily_discharges, fig.-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave('figures/daily_discharges.pdf', device = cairo_pdf, 
+       width = 5, height = 4)
+#> No summary function supplied, defaulting to `mean_se()`
+```
 
 # Calculate Annual Totals
 
-## Method 1 (Not very useful)
-
-Problem with the following is that the discharges for both 2016 and 2018
-are for partial years. Looking at annual totals, without scaling is
-therefore misleading.
+Averaging over 24 Months:
 
 ``` r
 monthdays <- c(31, 28, 31, 30,31,30, 31, 31, 30, 31, 30, 31)
-tmp <- the_data %>% 
-  mutate(MonthTot= Avg * monthdays[as.numeric(month)])
-annual_data<- tmp %>% 
-  select(Site, year, Avg, MonthTot) %>% 
-  group_by(Site, year) %>% 
-  summarise(Annual = sum(MonthTot, na.omit = TRUE)) %>%
-  mutate(Site = fct_reorder(Site, Annual, .desc = TRUE))
-#> `summarise()` has grouped output by 'Site'. You can override using the `.groups` argument.
-rm(tmp)
-```
-
-### Related Gaphic
-
-``` r
-ggplot(annual_data, aes(year, Annual, fill = Site)) +
-  geom_col(position = position_dodge()) +
-
-  xlab('') + 
-  ylab('Annual Discharge (MG)')  +
-  scale_fill_viridis_d(name = '') +
-  theme_cbep(base_size = 12) +
-  theme(legend.position = 'bottom', 
-        legend.text = element_text(size = 10)) +
-  guides(fill = guide_legend(ncol = 2))
-```
-
-<img src="Wastewater-Discharge-Graphics-2016-2018_files/figure-gfm/unnamed-chunk-9-1.png" style="display: block; margin: auto;" />
-
-## Method 2: Averaging over 24 Months
-
-``` r
 tmp <- the_data %>% 
   mutate(MonthTot= Avg * monthdays[as.numeric(month)])
 annual_data<- tmp %>% 
@@ -196,7 +176,7 @@ rm(tmp)
 ggplot(annual_data, aes(Site, Annual_Avg)) +
   geom_col(position = position_dodge(), fill = cbep_colors()[2]) +
   xlab('') + 
-  ylab('Average Annual Discharge\nMillions of Gallons ')  +
+  ylab('Annual Discharge\nMillions of Gallons ')  +
   scale_y_continuous(labels = scales::comma_format()) +
   theme_cbep(base_size = 12) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +
@@ -204,7 +184,7 @@ ggplot(annual_data, aes(Site, Annual_Avg)) +
             label = 'Based on data from\nAugust 2016 through July 2018')
 ```
 
-<img src="Wastewater-Discharge-Graphics-2016-2018_files/figure-gfm/unnamed-chunk-11-1.png" style="display: block; margin: auto;" />
+<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_annual_totals-1.png" style="display: block; margin: auto;" />
 
 ``` r
 ggsave('figures/annual_discharges.pdf', device = cairo_pdf, 
