@@ -1,5 +1,5 @@
 ---
-title: "Casco Bay WWTF Discharges 2016 through 2018"
+title: "Casco Bay WWTF Discharges 2016 Through 2018"
 author: "Curtis C. Bohlen, Casco Bay Estuary Partnership."
 date: "04/26/2021"
 output:
@@ -19,7 +19,7 @@ knitr::opts_chunk$set(fig.align = 'center',
                       collapse = TRUE, comment = "#>")
 ```
 
-#Load libraries
+# Load Libraries
 ```{r load libraries}
 library(readxl)
 library(tidyverse)
@@ -146,10 +146,9 @@ alt_data <- raw_data %>%
 alt_data
 ```
 
-Portland
-Water District reports higher net reductions due to nitrogen optimization.  The
-difference probably reflects the fact that our estimate of current mean
-concentrations applies over the entire monitoring season , and thus
+Portland Water District reports higher net reductions due to nitrogen
+optimization.  The difference probably reflects the fact that our estimate of
+current mean concentrations applies over the entire monitoring season , and thus
 includes some periods when nitrogen optimization did not occur.
 
 #### Calculate Estimate  and its Variance
@@ -384,7 +383,7 @@ plt <- combined_summary %>%
   xlab('') +
   
   theme_cbep(base_size = 12) +
-  theme(axis.text.x= element_text(angle = 90, vjust = 0.25, hjust = 1),,
+  theme(axis.text.x= element_text(angle = 90, vjust = 0.25, hjust = 1),
         axis.title.y= element_text(size = 10))
 plt
 ggsave('figures/tn_discharges_kg.pdf', device = cairo_pdf, 
@@ -430,7 +429,7 @@ ggsave('figures/tn_discharges_annual.pdf', device = cairo_pdf,
 ```
 
 ## TN Loads, Annual, Metric Tons -- Stacked Bar
-```{r tn_annual_stacked, fig.width = 3, fig.height = 3}
+```{r tn_annual_stacked, fig.width = 2.95, fig.height = 4}
 plt <- combined_summary %>%
   mutate(Site = fct_reorder(factor(Site), tn_load_avg_mtpy, .desc = FALSE)) %>%
   
@@ -438,7 +437,7 @@ plt <- combined_summary %>%
   geom_col() + 
   
   #scale_y_log10() + 
-  ylab('Annual TN Discharge\n(metric tons)')  +
+  ylab('Total Nitrogen\n(Metric Tons per Year)')  +
   xlab('') +
   
   scale_fill_manual(values = cbep_colors(), name = '') +
@@ -446,11 +445,12 @@ plt <- combined_summary %>%
   theme(axis.text.x= element_blank(),
         axis.ticks.x = element_blank(),
         legend.key.size = unit(0.2, 'in'),
-        legend.text = element_text(size = 9))
+        legend.text = element_text(size = 9)) +
+  ylim(0, 500)
 ```
 
 ### Add Totals Annotation
-```{r final_tn_annual_plot, fig.width = 2.9, fig.height = 3}
+```{r final_tn_annual_plot, fig.width = 2.95, fig.height = 4}
 total <- combined_summary %>%
   filter(Site != 'Portland EEWTF') %>%
   select(tn_load_avg_mtpy) %>%
@@ -459,16 +459,16 @@ total <- combined_summary %>%
 
 
 plt2 <- plt +
-  ylim(0, 1.1 * total) +
+  #ylim(0, 1.1 * total) +
   annotate('text', x = 1, y = 1.045 * total, 
             label = paste(round(total), 'MT'), 
             size = 3) +
-  labs(caption = 'Wastewater Discharges')  +
+  #labs(caption = 'Wastewater Discharges')  +
   theme(plot.caption = element_text(hjust=0, size = 12))
 
 plt2
 ggsave('figures/annual_tn_loads.pdf', device = cairo_pdf, 
-       width = 2.9, height = 3)
+       width = 3, height = 4)
 ```
 
 # Waffle Plot of WWTF Nitrogen

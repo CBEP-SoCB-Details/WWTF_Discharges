@@ -1,8 +1,9 @@
-Casco Bay WWTF Discharges 2016 through 2018
+Casco Bay WWTF Discharges 2016 Through 2018
 ================
 Curtis C. Bohlen, Casco Bay Estuary Partnership.
 04/26/2021
 
+-   [Load Libraries](#load-libraries)
 -   [Read Data](#read-data)
     -   [Folder References](#folder-references)
     -   [Load Raw Data](#load-raw-data)
@@ -36,7 +37,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership.
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
     style="position:absolute;top:10px;right:50px;" />
 
-\#Load libraries
+# Load Libraries
 
 ``` r
 library(readxl)
@@ -44,10 +45,9 @@ library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tibble  3.1.2     v dplyr   1.0.6
 #> v tidyr   1.1.3     v stringr 1.4.0
 #> v readr   1.4.0     v forcats 0.5.1
-#> Warning: package 'tibble' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
 #> Warning: package 'forcats' was built under R version 4.0.5
@@ -449,7 +449,7 @@ plt <- combined_summary %>%
   xlab('') +
   
   theme_cbep(base_size = 12) +
-  theme(axis.text.x= element_text(angle = 90, vjust = 0.25, hjust = 1),,
+  theme(axis.text.x= element_text(angle = 90, vjust = 0.25, hjust = 1),
         axis.title.y= element_text(size = 10))
 plt
 ```
@@ -521,7 +521,7 @@ plt <- combined_summary %>%
   geom_col() + 
   
   #scale_y_log10() + 
-  ylab('Annual TN Discharge\n(metric tons)')  +
+  ylab('Total Nitrogen\n(Metric Tons per Year)')  +
   xlab('') +
   
   scale_fill_manual(values = cbep_colors(), name = '') +
@@ -529,7 +529,8 @@ plt <- combined_summary %>%
   theme(axis.text.x= element_blank(),
         axis.ticks.x = element_blank(),
         legend.key.size = unit(0.2, 'in'),
-        legend.text = element_text(size = 9))
+        legend.text = element_text(size = 9)) +
+  ylim(0, 500)
 ```
 
 ### Add Totals Annotation
@@ -543,11 +544,11 @@ total <- combined_summary %>%
 
 
 plt2 <- plt +
-  ylim(0, 1.1 * total) +
+  #ylim(0, 1.1 * total) +
   annotate('text', x = 1, y = 1.045 * total, 
             label = paste(round(total), 'MT'), 
             size = 3) +
-  labs(caption = 'Wastewater Discharges')  +
+  #labs(caption = 'Wastewater Discharges')  +
   theme(plot.caption = element_text(hjust=0, size = 12))
 
 plt2
@@ -557,7 +558,7 @@ plt2
 
 ``` r
 ggsave('figures/annual_tn_loads.pdf', device = cairo_pdf, 
-       width = 2.9, height = 3)
+       width = 3, height = 4)
 ```
 
 # Waffle Plot of WWTF Nitrogen
