@@ -41,9 +41,8 @@ values except `MONTHLY_ AVG_ FLOW_2012-2016 (MGD)` are out of date.
 
 Summaries of TN concentrations, expressed as sample sizes, means, SDs, and SE of
 the mean of available monthly data for each site, are exported from the R
-notebook "Annual_Nitrogen_COncetration_Date.Rmd"as "Annual_Summary_TN.csv".
+notebook "Annual_Nitrogen_Concetration_Datae.Rmd"as "Annual_Summary_TN.csv".
 Data is total nitrogen concentration, in units of mg/l.  Data includes an 
 alternate estimate of mean annual TN concentrations for Portland's East End WWTF
 that incorporates older data as a surrogate for (unmeasured here) winter 
 concentrations.
-.

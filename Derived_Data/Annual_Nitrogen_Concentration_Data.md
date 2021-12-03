@@ -32,10 +32,9 @@ library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tibble  3.1.2     v dplyr   1.0.6
 #> v tidyr   1.1.3     v stringr 1.4.0
 #> v readr   1.4.0     v forcats 0.5.1
-#> Warning: package 'tibble' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
 #> Warning: package 'forcats' was built under R version 4.0.5
@@ -147,7 +146,8 @@ the_data <- the_data %>%
 
 We are not interested (here) in the Sea Meadows, Cape Elizabeth, Peaks
 Island, or Westbrook plants. They are small plants, for which we lack
-discharge data.
+discharge data, or in the case of Westbrook, they discharge into a
+tributary, so N will be counted as part of the tributary load.
 
 ``` r
 xtabs(~ year + month + Site, data = the_data,
@@ -352,7 +352,8 @@ Those investments clearly led to significant reductions in discharges.
 In preliminary review, we found standard deviations scale with medians
 and means. There is little difference in these data between medians and
 means. Since we are adding up totals, we prefer the means, because
-calculating the mean is a linear function.
+calculating the mean is a linear function, so a sum of means is the mean
+of sums.
 
 ## Assemble Summary Tibble
 
@@ -454,7 +455,7 @@ in May.
 Portland Water District reports higher net reductions due to nitrogen
 optimization. The difference probably reflects the fact that our
 estimate of current mean concentrations applies over the entire
-monitoring season , and thus includes some periods when nitrogen
+monitoring season, and thus includes some periods when nitrogen
 optimization did not occur.
 
 #### Calculate Estimate and its Variance

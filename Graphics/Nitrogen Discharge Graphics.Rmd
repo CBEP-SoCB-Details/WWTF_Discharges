@@ -41,7 +41,7 @@ sibling <- file.path(parent,sibfldnm)
 dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 ```
 
-## Load Raw Data
+## Load Raw TN Data
 We have a handful of non-detects for TKN, so we need to read data in as text
 and convert to numeric values, skipping the '<' sign included in the data
 source.  We add the `tkn_flag` variable to track which values are non-detects.
@@ -62,7 +62,7 @@ raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
          tp = `TP (DIRECT) (MG/L)`) %>%
   select(-op, -tp) %>%
  
-  # Address non-detects
+  # Address non-detects.  Here we replace non-detects with the detection limit.
   mutate(tkn_val = as.numeric(tkn),
          tkn_flag = grepl('<', tkn)) %>%
   mutate(tkn_val = if_else(tkn_flag,
@@ -180,7 +180,7 @@ sum_tn <- sum_tn %>%
 rm(alt_data)
 ```
 
-# Load DEP Summary Data
+# Load DEP Summary Data, Including Volumes
 The Summary Tab in the original DEP excel spreadsheet includes data on the 
 SAPPI and Westbrook plants.  Both discharge to the Presumpscot, so related 
 nutrient loads should be tracked via riverine inputs to the Bay.  Moreover,
@@ -190,7 +190,11 @@ included anyway.  We drop both plants.
 We also note that the summary TN concentrations in the DEP summary data are
 based on older (principally 2008) data, and have not been updated with the newer
 information.  We discard those data in favor of the updated information
-assembled from the raw data.
+assembled from the raw data. This incorporates reductions in N discharge due to PWD's Nitrogen OPtimization program.  PWD reports that program reduces summer
+N discharges by about 70%, so we expect annual totals to drop by about a third,
+and that is, in fact, close to what we see.  Our analysis of the older data
+shows the EEWTF discharging about 400 MT N per year, while here the value is 
+about 250 MT N per year.
 
 ```{r load_dep_summary_data}
 discharge_data <- read_excel(file.path(sibling, fn), sheet = 'summary', n_max = 7,

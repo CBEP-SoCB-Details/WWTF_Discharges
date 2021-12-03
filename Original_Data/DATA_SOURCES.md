@@ -2,14 +2,14 @@
 Origial PDFs in "flowsforcascobaydischarges.zip' e-mailed to me
 by Gregg Wood, August 24, 2018
 
-Monthly data was hand entered into Total Discharges.xlsx file 
-(in the 'Derived Data" folder) as the tab "Monthly Discharge Data", 
+Monthly data was hand entered into "Total_Discharge_Volumes.xlsx"" file 
+(in the "Derived Data" folder) as the tab "Monthly Discharge Data", 
 following notes from Greg Wood on the PDF data sheets.  Falmouth 
 WWTF discharge N data came directly from the Falmouth Plant but
-informaiton on the date and source of the e-mail have been misplaced.
+information on the date and sender of the e-mail have been misplaced.
 
 That data was aggregated to annual totals, in the R Notebook
-"Wastewater Discharge Data 2016-2018.Rmd".
+"Wastewater Discharge Data 2016-2018.Rmd", also in the Derived Data folder.
 
 
 # Nitrogen Data and Alternate Discharge Data

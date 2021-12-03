@@ -6,13 +6,14 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership.
 -   [Load Libraries](#load-libraries)
 -   [Read Data](#read-data)
     -   [Folder References](#folder-references)
-    -   [Load Raw Data](#load-raw-data)
+    -   [Load Raw TN Data](#load-raw-tn-data)
         -   [Correct Error in Source
             Data](#correct-error-in-source-data)
     -   [Assemble Summary Tibble](#assemble-summary-tibble)
         -   [Add Alternate East End
             Values](#add-alternate-east-end-values)
--   [Load DEP Summary Data](#load-dep-summary-data)
+-   [Load DEP Summary Data, Including
+    Volumes](#load-dep-summary-data-including-volumes)
 -   [Combine Summary Data](#combine-summary-data)
     -   [Unit Conversions](#unit-conversions)
 -   [Preliminary Plots](#preliminary-plots)
@@ -44,10 +45,11 @@ library(readxl)
 library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
-#> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.1.2     v dplyr   1.0.6
-#> v tidyr   1.1.3     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.1
+#> v ggplot2 3.3.5     v purrr   0.3.4
+#> v tibble  3.1.6     v dplyr   1.0.7
+#> v tidyr   1.1.4     v stringr 1.4.0
+#> v readr   2.1.0     v forcats 0.5.1
+#> Warning: package 'ggplot2' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
 #> Warning: package 'forcats' was built under R version 4.0.5
@@ -74,7 +76,7 @@ sibling <- file.path(parent,sibfldnm)
 dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 ```
 
-## Load Raw Data
+## Load Raw TN Data
 
 We have a handful of non-detects for TKN, so we need to read data in as
 text and convert to numeric values, skipping the ‘&lt;’ sign included in
@@ -97,7 +99,7 @@ raw_data <- read_excel(file.path(sibling, fn), sheet = 'QC final') %>%
          tp = `TP (DIRECT) (MG/L)`) %>%
   select(-op, -tp) %>%
  
-  # Address non-detects
+  # Address non-detects.  Here we replace non-detects with the detection limit.
   mutate(tkn_val = as.numeric(tkn),
          tkn_flag = grepl('<', tkn)) %>%
   mutate(tkn_val = if_else(tkn_flag,
@@ -232,7 +234,7 @@ sum_tn <- sum_tn %>%
 rm(alt_data)
 ```
 
-# Load DEP Summary Data
+# Load DEP Summary Data, Including Volumes
 
 The Summary Tab in the original DEP excel spreadsheet includes data on
 the SAPPI and Westbrook plants. Both discharge to the Presumpscot, so
@@ -243,7 +245,13 @@ be included anyway. We drop both plants.
 We also note that the summary TN concentrations in the DEP summary data
 are based on older (principally 2008) data, and have not been updated
 with the newer information. We discard those data in favor of the
-updated information assembled from the raw data.
+updated information assembled from the raw data. This incorporates
+reductions in N discharge due to PWD’s Nitrogen OPtimization program.
+PWD reports that program reduces summer N discharges by about 70%, so we
+expect annual totals to drop by about a third, and that is, in fact,
+close to what we see. Our analysis of the older data shows the EEWTF
+discharging about 400 MT N per year, while here the value is about 250
+MT N per year.
 
 ``` r
 discharge_data <- read_excel(file.path(sibling, fn), sheet = 'summary', n_max = 7,

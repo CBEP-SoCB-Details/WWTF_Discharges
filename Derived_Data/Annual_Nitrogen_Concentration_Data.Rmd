@@ -109,7 +109,9 @@ the_data <- the_data %>%
 
 #### What years were data collected?
 We are not interested (here) in the Sea Meadows, Cape Elizabeth, Peaks Island, 
-or Westbrook plants. They are small plants, for which we lack discharge data.
+or Westbrook plants. They are small plants, for which we lack discharge data, or
+in the case of Westbrook, they discharge into a tributary, so N will be counted 
+as part of the tributary load.
 ```{r}
 xtabs(~ year + month + Site, data = the_data,
       drop.unused.levels = TRUE)
@@ -178,7 +180,7 @@ Those investments clearly led to significant reductions in discharges.
 In preliminary review, we found standard deviations scale with medians and
 means. There is little difference in these data between medians and means.
 Since we are adding up totals, we prefer the means, because calculating the mean
-is a linear function.
+is a linear function, so a sum of means is the mean of sums.
 
 ## Assemble Summary Tibble
 ```{r}
@@ -265,7 +267,7 @@ nitrogen optimization is not possible, especially in May.
 
 Portland Water District reports higher net reductions due to nitrogen
 optimization.  The difference probably reflects the fact that our estimate of
-current mean concentrations applies over the entire monitoring season , and thus
+current mean concentrations applies over the entire monitoring season, and thus
 includes some periods when nitrogen optimization did not occur.
 
 #### Calculate Estimate and its Variance

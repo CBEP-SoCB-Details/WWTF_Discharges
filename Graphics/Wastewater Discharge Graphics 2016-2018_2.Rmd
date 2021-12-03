@@ -103,8 +103,21 @@ plt <- ggplot(the_data) +
 plt
 ```
 
-```{r plot_daily_discharges, fig.}
-plt <- ggplot(the_data, aes(Site, Avg)) + 
+# Mean of Monthly Estimates of Daily Discharges
+These are our calculated values based on data from PDFs of discharge reports.
+Compare to the official DEP values in the Excel data provided directly by Angie
+Brewer, which we used for calculating N loading. The values do not quite match,
+but are similar.
+```{r}
+the_data %>%
+  group_by(Site) %>%
+  summarize(MGD = mean(Avg, na.rm = TRUE))
+```
+
+```{r plot_daily_discharges, fig.width = 3, fig.height = 3.5}
+plt <- the_data %>%
+  filter(Site != 'Westbrook') %>%
+  ggplot(aes(Site, Avg)) + 
   stat_summary(geom = 'col', fill = cbep_colors()[4]) +
   # stat_summary(geom = 'linerange',
   #              fun.data = "mean_cl_normal",
@@ -117,13 +130,12 @@ plt <- ggplot(the_data, aes(Site, Avg)) +
   theme(legend.position = 'bottom', 
         legend.text = element_text(size = 10),
         axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +
-  annotate("text", x = 6, y = 13,  size = 3.5,
+  annotate("text", x = 5, y = 13,  size = 3,
             label = 'Based on data from\nAugust 2016 through July 2018')
 plt
 ggsave('figures/daily_discharges.pdf', device = cairo_pdf, 
-       width = 5, height = 4)
+       width = 3, height = 3.5)
 ```
-
 
 
 # Calculate Annual Totals

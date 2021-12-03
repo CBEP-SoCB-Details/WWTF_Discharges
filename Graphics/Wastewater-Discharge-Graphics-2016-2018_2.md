@@ -7,6 +7,8 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership.
     -   [Folder References](#folder-references)
     -   [Load Data](#load-data)
     -   [Limit To Two Years of Data](#limit-to-two-years-of-data)
+-   [Mean of Monthly Estimates of Daily
+    Discharges](#mean-of-monthly-estimates-of-daily-discharges)
 -   [Calculate Annual Totals](#calculate-annual-totals)
     -   [Related Graphic](#related-graphic)
 
@@ -22,10 +24,9 @@ library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tibble  3.1.2     v dplyr   1.0.6
 #> v tidyr   1.1.3     v stringr 1.4.0
 #> v readr   1.4.0     v forcats 0.5.1
-#> Warning: package 'tibble' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
 #> Warning: package 'forcats' was built under R version 4.0.5
@@ -126,8 +127,34 @@ plt
 
 <img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_flows_by_month-1.png" style="display: block; margin: auto;" />
 
+# Mean of Monthly Estimates of Daily Discharges
+
+These are our calculated values based on data from PDFs of discharge
+reports. Compare to the official DEP values in the Excel data provided
+directly by Angie Brewer, which we used for calculating N loading. The
+values do not quite match, but are similar.
+
 ``` r
-plt <- ggplot(the_data, aes(Site, Avg)) + 
+the_data %>%
+  group_by(Site) %>%
+  summarize(MGD = mean(Avg, na.rm = TRUE))
+#> # A tibble: 8 x 2
+#>   Site              MGD
+#>   <fct>           <dbl>
+#> 1 Portland EEWTF 16.5  
+#> 2 South Portland  5.67 
+#> 3 Westbrook       2.94 
+#> 4 Falmouth        0.898
+#> 5 Yarmouth        0.724
+#> 6 Freeport        0.322
+#> 7 Cape Elizabeth  0.260
+#> 8 Peaks Island    0.106
+```
+
+``` r
+plt <- the_data %>%
+  filter(Site != 'Westbrook') %>%
+  ggplot(aes(Site, Avg)) + 
   stat_summary(geom = 'col', fill = cbep_colors()[4]) +
   # stat_summary(geom = 'linerange',
   #              fun.data = "mean_cl_normal",
@@ -140,17 +167,17 @@ plt <- ggplot(the_data, aes(Site, Avg)) +
   theme(legend.position = 'bottom', 
         legend.text = element_text(size = 10),
         axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1)) +
-  annotate("text", x = 6, y = 13,  size = 3.5,
+  annotate("text", x = 5, y = 13,  size = 3,
             label = 'Based on data from\nAugust 2016 through July 2018')
 plt
 #> No summary function supplied, defaulting to `mean_se()`
 ```
 
-<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_daily_discharges, fig.-1.png" style="display: block; margin: auto;" />
+<img src="Wastewater-Discharge-Graphics-2016-2018_2_files/figure-gfm/plot_daily_discharges-1.png" style="display: block; margin: auto;" />
 
 ``` r
 ggsave('figures/daily_discharges.pdf', device = cairo_pdf, 
-       width = 5, height = 4)
+       width = 3, height = 3.5)
 #> No summary function supplied, defaulting to `mean_se()`
 ```
 
