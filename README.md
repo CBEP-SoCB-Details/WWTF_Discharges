@@ -14,7 +14,7 @@ review, critique, learn from, and build upon CBEP science.
 # Archive Structure
 CBEP 2020 State of the Bay data analysis repositories are divided into from two
 to four sub-folders.  All archives contain at least an "Original_Data" and a
-"Graphics" folder.  The other two foldersare only included if strictly
+"Graphics" folder.  The other two folders are only included if strictly
 necessary.
 
 - Original Data.  Original data, with a "DATA_SOURCES.md" or "READ ME.txt" file
@@ -45,7 +45,7 @@ different link, the equivalent file is now available at:
 
 DEP estimates of total and nitrogen discharges as of  2018 were derived from 
 data shared with CBEP by staff at DEP.  Those data are based on measured
-N concetrations in wastewater from each plant from 2008, and in one case from
+N concentrations in wastewater from each plant from 2008, and in one case from
 the mid 2010s.  As of 2018, that was the most consistent long-term data series
 available, and was the basis for most analyses here.  We anticipate updating 
 this analysis with more recent numbers, from direct monitoring, soon.
