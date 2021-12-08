@@ -1,5 +1,5 @@
 # Discharge Data
-Origial PDFs in "flowsforcascobaydischarges.zip' e-mailed to me
+Original PDFs in "flowsforcascobaydischarges.zip' e-mailed to me
 by Gregg Wood, August 24, 2018
 
 Monthly data was hand entered into "Total_Discharge_Volumes.xlsx"" file 
