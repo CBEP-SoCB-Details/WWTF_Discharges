@@ -8,7 +8,7 @@ as the tab "Monthly Discharge Data".  Interpretation followed notes from Greg
 Wood on the PDF data sheets.
 
 Falmouth WWTF discharge N came in e-mails directly from the Falmouth Plant staff
-back in 20018.  Date and details of the e-mail are now missing.
+back in 2018.  Date and details of the e-mail are now missing.
 
 Monthly data from May 2016 through April 2018 was aggregated to average annual
 totals in the R Notebook "Wastewater_Discharges_2016-2018.Rmd".  Annual
